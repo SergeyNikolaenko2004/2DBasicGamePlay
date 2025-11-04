@@ -24,6 +24,19 @@ public class EnemyAI : MonoBehaviour
     [SerializeField] private Transform attackPoint;
     [SerializeField] private GroundSensor groundSensor;
 
+    [Header("Enemy Sounds")]
+    [SerializeField] private AudioClip runningSound;
+    [SerializeField] private AudioClip jumpSound;
+    [SerializeField] private AudioClip landSound;
+    [SerializeField] private AudioClip attackMissSound;
+    [SerializeField] private AudioClip attackHitSound;
+    [SerializeField] private AudioSource audioSource;
+    [SerializeField] private AudioSource movementAudioSource;
+
+    [Header("Sound Volumes")]
+    [SerializeField] private float runningVolume = 0.3f;
+    [SerializeField] private float attackVolume = 0.6f;
+
     private Animator animator;
     private Rigidbody2D rb;
     private HealthSystem healthSystem;
@@ -36,9 +49,14 @@ public class EnemyAI : MonoBehaviour
     private bool isDead = false;
     private bool isChasing = false;
     private bool isWaiting = false;
+    private bool isAttacking = false;
+    private bool isJumping = false;
+    private bool wasGrounded = false;
+    private bool hitPlayerThisAttack = false;
     private float timeSinceLastAttack = 0f;
     private float waitTimer = 0f;
     private float currentPatrolDirection = 1f;
+    private bool isRunningSoundPlaying = false;
 
     // Animation parameters
     private static readonly int AnimState = Animator.StringToHash("AnimState");
@@ -46,6 +64,7 @@ public class EnemyAI : MonoBehaviour
     private static readonly int Hurt = Animator.StringToHash("Hurt");
     private static readonly int Death = Animator.StringToHash("Death");
     private static readonly int Grounded = Animator.StringToHash("Grounded");
+    private static readonly int IsAttacking = Animator.StringToHash("IsAttacking");
 
     private enum EnemyState { Patrolling, Chasing, Attacking, Waiting, Dead }
     private EnemyState currentState = EnemyState.Patrolling;
@@ -60,6 +79,9 @@ public class EnemyAI : MonoBehaviour
         FindPlayer();
         InitializePatrolPoints();
         SubscribeToHealthEvents();
+        InitializeAudioSources();
+
+        wasGrounded = groundSensor != null ? groundSensor.IsGrounded : true;
     }
 
     private void Update()
@@ -67,13 +89,19 @@ public class EnemyAI : MonoBehaviour
         if (isDead) return;
 
         UpdateTimers();
-        HandleStateMachine();
+
+        if (!isAttacking) 
+        {
+            HandleStateMachine();
+        }
+
         UpdateAnimations();
+        HandleRunningSound();
     }
 
     private void FixedUpdate()
     {
-        if (isDead) return;
+        if (isDead || isAttacking) return; 
         HandleMovement();
     }
 
@@ -83,6 +111,41 @@ public class EnemyAI : MonoBehaviour
         animator = GetComponent<Animator>();
         rb = GetComponent<Rigidbody2D>();
         healthSystem = GetComponent<HealthSystem>();
+    }
+
+    private void InitializeAudioSources()
+    {
+        if (audioSource == null)
+        {
+            audioSource = GetComponent<AudioSource>();
+            if (audioSource == null)
+            {
+                audioSource = gameObject.AddComponent<AudioSource>();
+            }
+        }
+
+        if (movementAudioSource == null)
+        {
+            AudioSource[] audioSources = GetComponents<AudioSource>();
+            if (audioSources.Length > 1)
+            {
+                movementAudioSource = audioSources[1];
+            }
+            else
+            {
+                movementAudioSource = gameObject.AddComponent<AudioSource>();
+            }
+        }
+
+        // Настройка AudioSource
+        audioSource.spatialBlend = 0f;
+        audioSource.playOnAwake = false;
+
+        // Настройка AudioSource для бега
+        movementAudioSource.spatialBlend = 0f;
+        movementAudioSource.playOnAwake = false;
+        movementAudioSource.loop = true;
+        movementAudioSource.volume = runningVolume;
     }
 
     private void FindPlayer()
@@ -159,7 +222,7 @@ public class EnemyAI : MonoBehaviour
             currentState = EnemyState.Patrolling;
             isChasing = false;
         }
-        else if (distanceToPlayer <= attackRange && timeSinceLastAttack >= attackCooldown)
+        else if (distanceToPlayer <= attackRange && timeSinceLastAttack >= attackCooldown && !isAttacking)
         {
             currentState = EnemyState.Attacking;
         }
@@ -167,9 +230,16 @@ public class EnemyAI : MonoBehaviour
 
     private void HandleAttackingState(float distanceToPlayer)
     {
-        if (distanceToPlayer > attackRange)
+        if (!isAttacking) 
         {
-            currentState = EnemyState.Chasing;
+            if (distanceToPlayer > attackRange)
+            {
+                currentState = EnemyState.Chasing;
+            }
+            else if (timeSinceLastAttack >= attackCooldown)
+            {
+                PerformAttack();
+            }
         }
     }
 
@@ -180,7 +250,7 @@ public class EnemyAI : MonoBehaviour
             isWaiting = false;
             waitTimer = 0f;
             currentState = EnemyState.Patrolling;
-            currentPatrolDirection *= -1; // Меняем направление после ожидания
+            currentPatrolDirection *= -1;
         }
     }
     #endregion
@@ -213,7 +283,6 @@ public class EnemyAI : MonoBehaviour
         float leftBound = patrolPointA.x;
         float rightBound = patrolPointB.x;
 
-        // Проверяем достижение границы
         if ((currentPatrolDirection > 0 && transform.position.x >= rightBound) ||
             (currentPatrolDirection < 0 && transform.position.x <= leftBound))
         {
@@ -221,7 +290,6 @@ public class EnemyAI : MonoBehaviour
             return;
         }
 
-        // Двигаемся в текущем направлении
         rb.velocity = new Vector2(currentPatrolDirection * moveSpeed, rb.velocity.y);
         UpdateFacingDirection(currentPatrolDirection);
     }
@@ -246,8 +314,11 @@ public class EnemyAI : MonoBehaviour
     private void AttackBehavior()
     {
         StopMovement();
-        PerformAttack();
-        currentState = EnemyState.Chasing; // Возвращаемся к преследованию после атаки
+
+        if (!isAttacking && timeSinceLastAttack >= attackCooldown)
+        {
+            PerformAttack();
+        }
     }
 
     private void StartWaiting()
@@ -256,6 +327,7 @@ public class EnemyAI : MonoBehaviour
         waitTimer = 0f;
         currentState = EnemyState.Waiting;
         StopMovement();
+        StopRunningSound();
     }
 
     private void StopMovement()
@@ -268,8 +340,23 @@ public class EnemyAI : MonoBehaviour
     private void PerformAttack()
     {
         animator.SetTrigger(Attack);
+        animator.SetBool(IsAttacking, true);
+        isAttacking = true;
         timeSinceLastAttack = 0f;
+        hitPlayerThisAttack = false; 
+    }
+
+    public void OnAttackHit()
+    {
         DetectAndDamagePlayer();
+        PlayAttackSound();
+    }
+
+    public void OnAttackEnd()
+    {
+        isAttacking = false;
+        animator.SetBool(IsAttacking, false);
+        currentState = EnemyState.Chasing;
     }
 
     private void DetectAndDamagePlayer()
@@ -282,14 +369,87 @@ public class EnemyAI : MonoBehaviour
             playerLayer
         );
 
+        bool hitAnyPlayer = false;
+
         foreach (Collider2D playerCollider in hitPlayers)
         {
             HealthSystem playerHealth = playerCollider.GetComponent<HealthSystem>();
             if (playerHealth != null && !playerHealth.IsInvincible)
             {
                 playerHealth.TakeDamage(attackDamage);
+                hitAnyPlayer = true;
             }
         }
+
+        hitPlayerThisAttack = hitAnyPlayer;
+    }
+
+    private void PlayAttackSound()
+    {
+        if (audioSource == null) return;
+
+        AudioClip clipToPlay = hitPlayerThisAttack ? attackHitSound : attackMissSound;
+
+        if (clipToPlay != null)
+        {
+            audioSource.PlayOneShot(clipToPlay, attackVolume);
+        }
+    }
+    #endregion
+
+    #region Sound Methods
+    private void HandleRunningSound()
+    {
+        bool shouldPlayRunningSound = ShouldPlayRunningSound();
+
+        if (shouldPlayRunningSound && !isRunningSoundPlaying)
+        {
+            StartRunningSound();
+        }
+        else if (!shouldPlayRunningSound && isRunningSoundPlaying)
+        {
+            StopRunningSound();
+        }
+    }
+
+    private bool ShouldPlayRunningSound()
+    {
+        return IsGrounded() &&
+               Mathf.Abs(rb.velocity.x) > Mathf.Epsilon &&
+               !isWaiting &&
+               !isAttacking &&
+               !isDead;
+    }
+
+    private void StartRunningSound()
+    {
+        if (movementAudioSource != null && runningSound != null && !isRunningSoundPlaying)
+        {
+            movementAudioSource.clip = runningSound;
+            movementAudioSource.volume = runningVolume;
+            movementAudioSource.Play();
+            isRunningSoundPlaying = true;
+        }
+    }
+
+    private void StopRunningSound()
+    {
+        if (movementAudioSource != null && isRunningSoundPlaying)
+        {
+            movementAudioSource.Stop();
+            isRunningSoundPlaying = false;
+        }
+    }
+
+    private bool IsGrounded()
+    {
+        return groundSensor != null ? groundSensor.IsGrounded : true;
+    }
+
+    public void OnJump()
+    {
+        isJumping = true;
+        StopRunningSound();
     }
     #endregion
 
@@ -313,7 +473,7 @@ public class EnemyAI : MonoBehaviour
 
     private void UpdateAnimations()
     {
-        bool isMoving = Mathf.Abs(rb.velocity.x) > Mathf.Epsilon && !isWaiting;
+        bool isMoving = Mathf.Abs(rb.velocity.x) > Mathf.Epsilon && !isWaiting && !isAttacking;
         animator.SetInteger(AnimState, isMoving ? 2 : 0);
 
         if (groundSensor != null)
@@ -328,6 +488,13 @@ public class EnemyAI : MonoBehaviour
     {
         if (isDead) return;
         animator.SetTrigger(Hurt);
+
+        if (isAttacking)
+        {
+            OnAttackEnd();
+        }
+
+        StopRunningSound();
     }
 
     private void OnDeath()
@@ -336,6 +503,7 @@ public class EnemyAI : MonoBehaviour
         currentState = EnemyState.Dead;
         StopMovement();
         animator.SetTrigger(Death);
+        StopRunningSound();
 
         DisablePhysics();
         Destroy(gameObject, 2f);
@@ -363,10 +531,28 @@ public class EnemyAI : MonoBehaviour
     }
     #endregion
 
+    #region Public Methods for Sound Configuration
+    public void SetRunningSound(AudioClip clip, float volume = 0.3f)
+    {
+        runningSound = clip;
+        runningVolume = Mathf.Clamp01(volume);
+        if (movementAudioSource != null)
+        {
+            movementAudioSource.volume = runningVolume;
+        }
+    }
+
+    public void SetAttackSounds(AudioClip missSound, AudioClip hitSound, float volume = 0.6f)
+    {
+        attackMissSound = missSound;
+        attackHitSound = hitSound;
+        attackVolume = Mathf.Clamp01(volume);
+    }
+    #endregion
+
     #region Editor
     private void OnDrawGizmosSelected()
     {
-        // Патрульные точки
         Gizmos.color = Color.blue;
         Vector2 visualStartPos = Application.isPlaying ? startPosition : (Vector2)transform.position;
         Vector2 visualPatrolA = visualStartPos + Vector2.left * patrolDistance;
@@ -376,7 +562,6 @@ public class EnemyAI : MonoBehaviour
         Gizmos.DrawWireSphere(visualPatrolB, 0.2f);
         Gizmos.DrawLine(visualPatrolA, visualPatrolB);
 
-        // Зоны
         Gizmos.color = Color.yellow;
         Gizmos.DrawWireSphere(transform.position, detectionRange);
 

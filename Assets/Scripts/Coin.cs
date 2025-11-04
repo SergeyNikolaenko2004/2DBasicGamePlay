@@ -30,12 +30,18 @@ public class Coin : MonoBehaviour
     {
         isCollected = true;
 
-        GameManager.Instance?.AddCoins(value);
-
         coinCollider.enabled = false;
         spriteRenderer.enabled = false;
+
+        GameManager.Instance?.AddCoins(value);
 
         Destroy(gameObject, collectDelay);
     }
 
+    #region Public Methods for Configuration
+    public void SetValue(int coinValue)
+    {
+        value = coinValue;
+    }
+    #endregion
 }

@@ -9,7 +9,10 @@ TagManager:
   - Enemy
   - PlayerAttack
   - CoinsText
-  - 'GameOverPanel '
+  - RestartButton
+  - GameOverPanel
+  - MainMenuButton
+  - ControlsDisplay
   layers:
   - Default
   - TransparentFX

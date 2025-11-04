@@ -13,19 +13,39 @@ public class PlayerCombat : MonoBehaviour
     [SerializeField] private Transform attackPoint;
     [SerializeField] private HealthSystem healthSystem;
 
+    [Header("Attack Sounds")]
+    [SerializeField] private AudioClip attackMissSound; 
+    [SerializeField] private AudioClip attackHitSound;  
+    [SerializeField] private AudioSource audioSource;  
+    [SerializeField] private float attackVolume = 0.7f; 
+
     private float timeSinceLastAttack = 0f;
     private int lastAttackIndex = 0;
     private bool canAttack = true;
+    private bool isAttacking = false;
+    private bool hitEnemyThisAttack = false;
 
-    // Animation parameters
     private static readonly int Attack1 = Animator.StringToHash("Attack1");
     private static readonly int Attack2 = Animator.StringToHash("Attack2");
     private static readonly int Attack3 = Animator.StringToHash("Attack3");
+    private static readonly int IsAttacking = Animator.StringToHash("IsAttacking");
 
     private void Awake()
     {
         if (healthSystem == null)
             healthSystem = GetComponent<HealthSystem>();
+
+        if (audioSource == null)
+        {
+            audioSource = GetComponent<AudioSource>();
+            if (audioSource == null)
+            {
+                audioSource = gameObject.AddComponent<AudioSource>();
+            }
+        }
+
+        audioSource.spatialBlend = 0f; 
+        audioSource.playOnAwake = false;
     }
 
     private void Start()
@@ -40,7 +60,7 @@ public class PlayerCombat : MonoBehaviour
 
     private void Update()
     {
-        if (!canAttack) return;
+        if (!canAttack || isAttacking || healthSystem.IsBlocking) return;
 
         timeSinceLastAttack += Time.deltaTime;
         HandleAttackInput();
@@ -48,7 +68,7 @@ public class PlayerCombat : MonoBehaviour
 
     private void HandleAttackInput()
     {
-        if (Input.GetKeyDown(KeyCode.H) && timeSinceLastAttack >= attackCooldown && canAttack)
+        if (Input.GetKeyDown(KeyCode.H) && timeSinceLastAttack >= attackCooldown && canAttack && !healthSystem.IsBlocking)
         {
             PerformAttack();
         }
@@ -58,12 +78,12 @@ public class PlayerCombat : MonoBehaviour
     {
         int nextAttackIndex = GetNextAttackIndex();
 
-        // Сбрасываем все триггеры
         animator.ResetTrigger(Attack1);
         animator.ResetTrigger(Attack2);
         animator.ResetTrigger(Attack3);
 
-        // Запускаем анимацию
+        hitEnemyThisAttack = false;
+
         switch (nextAttackIndex)
         {
             case 1:
@@ -77,13 +97,40 @@ public class PlayerCombat : MonoBehaviour
                 break;
         }
 
-        // Наносим урон врагам в зоне атаки
-        DetectAndDamageEnemies();
+        isAttacking = true;
+        animator.SetBool(IsAttacking, true);
 
         lastAttackIndex = nextAttackIndex;
         timeSinceLastAttack = 0f;
 
         Debug.Log($"Performing attack: {nextAttackIndex}");
+    }
+
+    public void OnAttackHit()
+    {
+        DetectAndDamageEnemies();
+        PlayAttackSound();
+    }
+
+    private void PlayAttackSound()
+    {
+        if (audioSource == null) return;
+
+        AudioClip clipToPlay = hitEnemyThisAttack ? attackHitSound : attackMissSound;
+
+        if (clipToPlay != null)
+        {
+            audioSource.PlayOneShot(clipToPlay, attackVolume);
+            Debug.Log($"Playing sound: {(hitEnemyThisAttack ? "Hit" : "Miss")}");
+        }
+    }
+
+    public void OnAttackEnd()
+    {
+        isAttacking = false;
+        animator.SetBool(IsAttacking, false);
+
+        hitEnemyThisAttack = false;
     }
 
     private void DetectAndDamageEnemies()
@@ -94,15 +141,20 @@ public class PlayerCombat : MonoBehaviour
             enemyLayer
         );
 
+        bool hitAnyEnemy = false;
+
         foreach (Collider2D enemy in hitEnemies)
         {
             HealthSystem enemyHealth = enemy.GetComponent<HealthSystem>();
             if (enemyHealth != null && !enemyHealth.IsInvincible)
             {
                 enemyHealth.TakeDamage(attackDamage);
+                hitAnyEnemy = true;
                 Debug.Log($"Hit enemy: {enemy.name} for {attackDamage} damage");
             }
         }
+
+        hitEnemyThisAttack = hitAnyEnemy;
     }
 
     private int GetNextAttackIndex()
@@ -121,6 +173,10 @@ public class PlayerCombat : MonoBehaviour
     private void OnDamageTaken(float damage)
     {
         canAttack = false;
+        if (isAttacking)
+        {
+            OnAttackEnd();
+        }
     }
 
     private void OnInvincibilityStart()

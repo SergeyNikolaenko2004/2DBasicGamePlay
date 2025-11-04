@@ -13,14 +13,13 @@ public class HealthSystem : MonoBehaviour
     [SerializeField] private float invincibilityDuration = 1f;
     [SerializeField] private bool isInvincible = false;
 
+    [Header("Block Settings")]
+    [SerializeField] private bool isBlocking = false;
+
     [Header("UI References")]
     [SerializeField] private Image currentHealthBar;
     [SerializeField] private Image currentHealthGlobe;
-    [SerializeField] private TMP_Text healthText;
-
-    [Header("Visual Feedback")]
-    [SerializeField] private SpriteRenderer spriteRenderer;
-    [SerializeField] private float blinkInterval = 0.1f;
+    [SerializeField] private Text healthText;
 
     public event System.Action<float> OnDamageTaken;
     public event System.Action OnDeath;
@@ -32,18 +31,15 @@ public class HealthSystem : MonoBehaviour
     public float HealthPercentage => currentHealth / maxHealth;
     public bool IsInvincible => isInvincible;
     public bool IsDead => isDead;
+    public bool IsBlocking => isBlocking;
 
     private bool isDead = false;
     private float invincibilityTimer = 0f;
-    private Coroutine blinkCoroutine;
 
     private void Start()
     {
         InitializeHealth();
 
-        // Автоматически находим SpriteRenderer если не назначен
-        if (spriteRenderer == null)
-            spriteRenderer = GetComponent<SpriteRenderer>();
     }
 
     private void Update()
@@ -60,6 +56,13 @@ public class HealthSystem : MonoBehaviour
     public void TakeDamage(float damage)
     {
         if (isDead || isInvincible || currentHealth <= 0) return;
+
+        // Проверяем блок - если блокируем, не получаем урон
+        if (isBlocking)
+        {
+            Debug.Log("Damage blocked!");
+            return;
+        }
 
         float previousHealth = currentHealth;
         currentHealth = Mathf.Max(0, currentHealth - damage);
@@ -79,6 +82,23 @@ public class HealthSystem : MonoBehaviour
         }
     }
 
+    #region Block System
+    public void StartBlock()
+    {
+        if (isDead) return;
+
+        isBlocking = true;
+        Debug.Log("Block started");
+    }
+
+    public void EndBlock()
+    {
+        isBlocking = false;
+        Debug.Log("Block ended");
+    }
+    #endregion
+
+    #region Invincibility System
     private void StartInvincibility()
     {
         if (invincibilityDuration <= 0) return;
@@ -87,23 +107,8 @@ public class HealthSystem : MonoBehaviour
         invincibilityTimer = invincibilityDuration;
         OnInvincibilityStart?.Invoke();
 
-        // Запускаем мигание если есть SpriteRenderer
-        if (spriteRenderer != null)
-        {
-            if (blinkCoroutine != null) StopCoroutine(blinkCoroutine);
-            blinkCoroutine = StartCoroutine(BlinkCoroutine());
-        }
     }
 
-    private System.Collections.IEnumerator BlinkCoroutine()
-    {
-        while (isInvincible)
-        {
-            spriteRenderer.enabled = !spriteRenderer.enabled;
-            yield return new WaitForSeconds(blinkInterval);
-        }
-        spriteRenderer.enabled = true;
-    }
 
     private void UpdateInvincibility()
     {
@@ -120,17 +125,22 @@ public class HealthSystem : MonoBehaviour
     {
         isInvincible = false;
 
-        if (blinkCoroutine != null)
-        {
-            StopCoroutine(blinkCoroutine);
-            blinkCoroutine = null;
-        }
-
-        if (spriteRenderer != null)
-            spriteRenderer.enabled = true;
-
         OnInvincibilityEnd?.Invoke();
     }
+
+    public void SetInvincible(bool invincible, float duration = 0f)
+    {
+        if (invincible)
+        {
+            if (duration > 0) invincibilityDuration = duration;
+            StartInvincibility();
+        }
+        else
+        {
+            EndInvincibility();
+        }
+    }
+    #endregion
 
     private void Die()
     {
@@ -139,10 +149,9 @@ public class HealthSystem : MonoBehaviour
         isDead = true;
         Debug.Log($"{name} уничтожен!");
 
-        // Отключаем неуязвимость при смерти
         EndInvincibility();
+        EndBlock();
 
-        // Уведомляем GameManager о смерти игрока
         if (gameObject.CompareTag("Player"))
         {
             GameManager.Instance?.GameOver();
@@ -164,20 +173,6 @@ public class HealthSystem : MonoBehaviour
         isDead = false;
         currentHealth = maxHealth;
         UpdateGraphics();
-    }
-
-    // Принудительно установить неуязвимость
-    public void SetInvincible(bool invincible, float duration = 0f)
-    {
-        if (invincible)
-        {
-            if (duration > 0) invincibilityDuration = duration;
-            StartInvincibility();
-        }
-        else
-        {
-            EndInvincibility();
-        }
     }
 
     private void UpdateHealthBar()

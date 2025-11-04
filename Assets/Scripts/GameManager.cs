@@ -1,6 +1,7 @@
-using UnityEngine;
+Ôªøusing UnityEngine;
 using TMPro;
 using UnityEngine.SceneManagement;
+using UnityEngine.UI;
 
 public class GameManager : MonoBehaviour
 {
@@ -8,7 +9,7 @@ public class GameManager : MonoBehaviour
 
     [Header("Coin System")]
     [SerializeField] private int currentCoins = 0;
-    [SerializeField] private TMP_Text coinsText;
+    [SerializeField] private Text coinsText;
     [SerializeField] private string coinsPrefix = "Coins: ";
 
     [Header("UI References")]
@@ -20,6 +21,11 @@ public class GameManager : MonoBehaviour
     [SerializeField] private bool isGamePaused = false;
     [SerializeField] private bool isGameOver = false;
 
+    [Header("Sound System")]
+    [SerializeField] private AudioClip coinCollectSound;
+    [SerializeField] private AudioSource sfxAudioSource;
+    [SerializeField] private float coinSoundVolume = 0.7f;
+
     private int initialCoins = 0;
     private string currentSceneName;
 
@@ -27,7 +33,7 @@ public class GameManager : MonoBehaviour
     public bool IsGamePaused => isGamePaused;
     public bool IsGameOver => isGameOver;
 
-    // —Ó·˚ÚËˇ
+    // –°–æ–±—ã—Ç–∏—è
     public event System.Action<int> OnCoinsChanged;
     public event System.Action OnGamePaused;
     public event System.Action OnGameResumed;
@@ -36,17 +42,13 @@ public class GameManager : MonoBehaviour
 
     private void Awake()
     {
-        if (Instance == null)
+        if (Instance != null)
         {
-            Instance = this;
-            DontDestroyOnLoad(gameObject);
-        }
-        else
-        {
-            Destroy(gameObject);
-            return;
+            Destroy(Instance.gameObject);
         }
 
+        Instance = this;
+        DontDestroyOnLoad(gameObject);
         InitializeGame();
     }
 
@@ -55,10 +57,26 @@ public class GameManager : MonoBehaviour
         currentSceneName = SceneManager.GetActiveScene().name;
         initialCoins = currentCoins;
 
+        InitializeAudioSource();
         UpdateCoinsUI();
         HideAllPanels();
 
         SceneManager.sceneLoaded += OnSceneLoaded;
+    }
+
+    private void InitializeAudioSource()
+    {
+        if (sfxAudioSource == null)
+        {
+            sfxAudioSource = GetComponent<AudioSource>();
+            if (sfxAudioSource == null)
+            {
+                sfxAudioSource = gameObject.AddComponent<AudioSource>();
+            }
+        }
+
+        sfxAudioSource.spatialBlend = 0f; 
+        sfxAudioSource.playOnAwake = false;
     }
 
     private void Update()
@@ -82,6 +100,9 @@ public class GameManager : MonoBehaviour
         currentCoins += amount;
         UpdateCoinsUI();
 
+        // –í–æ—Å–ø—Ä–æ–∏–∑–≤–æ–¥–∏–º –∑–≤—É–∫ —Å–±–æ—Ä–∞ –º–æ–Ω–µ—Ç–∫–∏
+        PlayCoinCollectSound();
+
         OnCoinsChanged?.Invoke(currentCoins);
         Debug.Log($"Coins collected: {amount}. Total: {currentCoins}");
     }
@@ -102,6 +123,38 @@ public class GameManager : MonoBehaviour
         if (coinsText != null)
         {
             coinsText.text = coinsPrefix + currentCoins.ToString();
+        }
+    }
+
+    private void PlayCoinCollectSound()
+    {
+        if (sfxAudioSource != null && coinCollectSound != null)
+        {
+            sfxAudioSource.PlayOneShot(coinCollectSound, coinSoundVolume);
+        }
+    }
+    #endregion
+
+    #region Sound System Public Methods
+    public void PlaySound(AudioClip clip, float volume = 1.0f)
+    {
+        if (sfxAudioSource != null && clip != null)
+        {
+            sfxAudioSource.PlayOneShot(clip, volume);
+        }
+    }
+
+    public void SetCoinSound(AudioClip clip, float volume = 0.7f)
+    {
+        coinCollectSound = clip;
+        coinSoundVolume = Mathf.Clamp01(volume);
+    }
+
+    public void SetSFXVolume(float volume)
+    {
+        if (sfxAudioSource != null)
+        {
+            sfxAudioSource.volume = Mathf.Clamp01(volume);
         }
     }
     #endregion
@@ -153,7 +206,7 @@ public class GameManager : MonoBehaviour
     public void LoadMainMenu()
     {
         Time.timeScale = 1f;
-        SceneManager.LoadScene("MainMenu"); 
+        SceneManager.LoadScene("MainMenu");
     }
 
     public void QuitGame()
@@ -161,7 +214,7 @@ public class GameManager : MonoBehaviour
 #if UNITY_EDITOR
         UnityEditor.EditorApplication.isPlaying = false;
 #else
-            Application.Quit();
+        Application.Quit();
 #endif
     }
     #endregion
@@ -202,7 +255,7 @@ public class GameManager : MonoBehaviour
         if (coinsText == null)
         {
             GameObject coinsTextObj = GameObject.FindGameObjectWithTag("CoinsText");
-            if (coinsTextObj != null) coinsText = coinsTextObj.GetComponent<TMP_Text>();
+            if (coinsTextObj != null) coinsText = coinsTextObj.GetComponent<Text>();
         }
 
         if (gameOverPanel == null)
@@ -230,7 +283,6 @@ public class GameManager : MonoBehaviour
 
     private void OnDestroy()
     {
-        // ŒÚÔËÒ˚‚‡ÂÏÒˇ ÓÚ ÒÓ·˚ÚËÈ
         SceneManager.sceneLoaded -= OnSceneLoaded;
     }
 }
