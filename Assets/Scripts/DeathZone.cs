@@ -7,7 +7,6 @@ public class DeathZone : MonoBehaviour
     [SerializeField] private float damage = 1000f; 
 
     [Header("Visual Effects")]
-    [SerializeField] private ParticleSystem deathEffect;
     [SerializeField] private AudioClip deathSound;
 
     private void OnTriggerEnter2D(Collider2D other)
@@ -28,12 +27,10 @@ public class DeathZone : MonoBehaviour
 
         if (instantDeath)
         {
-            // Мгновенная смерть
             playerHealth.TakeDamage(playerHealth.MaxHealth);
         }
         else
         {
-            // Большой урон
             playerHealth.TakeDamage(damage);
         }
 
@@ -51,13 +48,6 @@ public class DeathZone : MonoBehaviour
 
     private void PlayDeathEffects()
     {
-        if (deathEffect != null)
-        {
-            ParticleSystem effect = Instantiate(deathEffect, transform.position, Quaternion.identity);
-            effect.Play();
-            Destroy(effect.gameObject, 2f);
-        }
-
         if (deathSound != null)
         {
             AudioSource.PlayClipAtPoint(deathSound, transform.position);
