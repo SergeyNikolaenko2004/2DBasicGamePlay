@@ -13,7 +13,6 @@ public class GameManager : MonoBehaviour
 
     [Header("UI References")]
     [SerializeField] private GameObject gameOverPanel;
-    [SerializeField] private GameObject pauseMenuPanel;
     [SerializeField] private UnityEngine.UI.Button restartButton;
     [SerializeField] private UnityEngine.UI.Button mainMenuButton;
 
@@ -37,7 +36,6 @@ public class GameManager : MonoBehaviour
 
     private void Awake()
     {
-        // Singleton pattern
         if (Instance == null)
         {
             Instance = this;
@@ -60,7 +58,6 @@ public class GameManager : MonoBehaviour
         UpdateCoinsUI();
         HideAllPanels();
 
-        // Подписываемся на события сцены
         SceneManager.sceneLoaded += OnSceneLoaded;
     }
 
@@ -143,7 +140,6 @@ public class GameManager : MonoBehaviour
         if (isGamePaused)
         {
             Time.timeScale = 0f;
-            ShowPauseMenu();
             OnGamePaused?.Invoke();
         }
         else
@@ -179,18 +175,9 @@ public class GameManager : MonoBehaviour
         }
     }
 
-    private void ShowPauseMenu()
-    {
-        if (pauseMenuPanel != null)
-        {
-            pauseMenuPanel.SetActive(true);
-        }
-    }
-
     private void HideAllPanels()
     {
         if (gameOverPanel != null) gameOverPanel.SetActive(false);
-        if (pauseMenuPanel != null) pauseMenuPanel.SetActive(false);
     }
     #endregion
 
@@ -222,11 +209,6 @@ public class GameManager : MonoBehaviour
         {
             gameOverPanel = GameObject.FindGameObjectWithTag("GameOverPanel");
         }
-
-        if (pauseMenuPanel == null)
-        {
-            pauseMenuPanel = GameObject.FindGameObjectWithTag("PauseMenuPanel");
-        }
     }
     #endregion
 
@@ -243,26 +225,6 @@ public class GameManager : MonoBehaviour
         initialCoins = coins;
         currentCoins = coins;
         UpdateCoinsUI();
-    }
-    #endregion
-
-    #region Debug Methods
-    [ContextMenu("Add 10 Coins")]
-    private void DebugAddCoins()
-    {
-        AddCoins(10);
-    }
-
-    [ContextMenu("Trigger Game Over")]
-    private void DebugGameOver()
-    {
-        GameOver();
-    }
-
-    [ContextMenu("Restart Level")]
-    private void DebugRestart()
-    {
-        RestartLevel();
     }
     #endregion
 

@@ -285,7 +285,10 @@ public class EnemyAI : MonoBehaviour
         foreach (Collider2D playerCollider in hitPlayers)
         {
             HealthSystem playerHealth = playerCollider.GetComponent<HealthSystem>();
-            playerHealth?.TakeDamage(attackDamage);
+            if (playerHealth != null && !playerHealth.IsInvincible)
+            {
+                playerHealth.TakeDamage(attackDamage);
+            }
         }
     }
     #endregion
@@ -310,11 +313,9 @@ public class EnemyAI : MonoBehaviour
 
     private void UpdateAnimations()
     {
-        // Movement animation
         bool isMoving = Mathf.Abs(rb.velocity.x) > Mathf.Epsilon && !isWaiting;
         animator.SetInteger(AnimState, isMoving ? 2 : 0);
 
-        // Grounded
         if (groundSensor != null)
         {
             animator.SetBool(Grounded, groundSensor.IsGrounded);
@@ -354,7 +355,10 @@ public class EnemyAI : MonoBehaviour
         if (collision.gameObject.CompareTag("Player"))
         {
             HealthSystem playerHealth = collision.gameObject.GetComponent<HealthSystem>();
-            playerHealth?.TakeDamage(contactDamage);
+            if (playerHealth != null && !playerHealth.IsInvincible)
+            {
+                playerHealth.TakeDamage(contactDamage);
+            }
         }
     }
     #endregion

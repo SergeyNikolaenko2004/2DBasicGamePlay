@@ -11,24 +11,44 @@ public class PlayerCombat : MonoBehaviour
     [Header("Components")]
     [SerializeField] private Animator animator;
     [SerializeField] private Transform attackPoint;
+    [SerializeField] private HealthSystem healthSystem;
 
     private float timeSinceLastAttack = 0f;
     private int lastAttackIndex = 0;
+    private bool canAttack = true;
 
     // Animation parameters
     private static readonly int Attack1 = Animator.StringToHash("Attack1");
     private static readonly int Attack2 = Animator.StringToHash("Attack2");
     private static readonly int Attack3 = Animator.StringToHash("Attack3");
 
+    private void Awake()
+    {
+        if (healthSystem == null)
+            healthSystem = GetComponent<HealthSystem>();
+    }
+
+    private void Start()
+    {
+        if (healthSystem != null)
+        {
+            healthSystem.OnDamageTaken += OnDamageTaken;
+            healthSystem.OnInvincibilityStart += OnInvincibilityStart;
+            healthSystem.OnInvincibilityEnd += OnInvincibilityEnd;
+        }
+    }
+
     private void Update()
     {
+        if (!canAttack) return;
+
         timeSinceLastAttack += Time.deltaTime;
         HandleAttackInput();
     }
 
     private void HandleAttackInput()
     {
-        if (Input.GetKeyDown(KeyCode.H) && timeSinceLastAttack >= attackCooldown)
+        if (Input.GetKeyDown(KeyCode.H) && timeSinceLastAttack >= attackCooldown && canAttack)
         {
             PerformAttack();
         }
@@ -68,7 +88,6 @@ public class PlayerCombat : MonoBehaviour
 
     private void DetectAndDamageEnemies()
     {
-        // Ищем всех врагов в радиусе атаки
         Collider2D[] hitEnemies = Physics2D.OverlapCircleAll(
             attackPoint.position,
             attackRange,
@@ -78,7 +97,7 @@ public class PlayerCombat : MonoBehaviour
         foreach (Collider2D enemy in hitEnemies)
         {
             HealthSystem enemyHealth = enemy.GetComponent<HealthSystem>();
-            if (enemyHealth != null)
+            if (enemyHealth != null && !enemyHealth.IsInvincible)
             {
                 enemyHealth.TakeDamage(attackDamage);
                 Debug.Log($"Hit enemy: {enemy.name} for {attackDamage} damage");
@@ -98,13 +117,39 @@ public class PlayerCombat : MonoBehaviour
         return nextAttack;
     }
 
-    // Для визуализации радиуса атаки в редакторе
+    #region Event Handlers
+    private void OnDamageTaken(float damage)
+    {
+        canAttack = false;
+    }
+
+    private void OnInvincibilityStart()
+    {
+        canAttack = false;
+    }
+
+    private void OnInvincibilityEnd()
+    {
+        canAttack = true;
+    }
+    #endregion
+
     private void OnDrawGizmosSelected()
     {
         if (attackPoint != null)
         {
             Gizmos.color = Color.red;
             Gizmos.DrawWireSphere(attackPoint.position, attackRange);
+        }
+    }
+
+    private void OnDestroy()
+    {
+        if (healthSystem != null)
+        {
+            healthSystem.OnDamageTaken -= OnDamageTaken;
+            healthSystem.OnInvincibilityStart -= OnInvincibilityStart;
+            healthSystem.OnInvincibilityEnd -= OnInvincibilityEnd;
         }
     }
 }

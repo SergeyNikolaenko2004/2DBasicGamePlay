@@ -52,16 +52,12 @@ public class PlayerController : MonoBehaviour
         }
 
         healthSystem.OnDamageTaken += (damage) => {
-            // Воспроизводим анимацию получения урона
             animator.SetTrigger("Hurt");
         };
 
         healthSystem.OnDeath += () => {
-            // Отключаем управление
             enabled = false;
-            // Воспроизводим анимацию смерти
             animator.SetTrigger("Death");
-            // Вызываем рестарт уровня через GameManager
         };
     }
 
@@ -125,7 +121,6 @@ public class PlayerController : MonoBehaviour
 
     private void UpdateAnimations()
     {
-        // Movement animation
         if (Mathf.Abs(horizontalInput) > Mathf.Epsilon)
         {
             animator.SetInteger(AnimState, 1);
@@ -135,7 +130,6 @@ public class PlayerController : MonoBehaviour
             animator.SetInteger(AnimState, 0);
         }
 
-        // Grounded and air speed
         animator.SetBool(Grounded, groundSensor.IsGrounded);
         animator.SetFloat(AirSpeedY, rb.velocity.y);
     }
@@ -155,19 +149,15 @@ public class PlayerController : MonoBehaviour
     private void OnDamageTaken(float damage)
     {
         animator.SetTrigger(Hurt);
-        // Здесь можно добавить эффекты получения урона
     }
 
     private void OnDeath()
     {
-        // Отключаем управление
         enabled = false;
         rb.velocity = Vector2.zero;
 
-        // Запускаем анимацию смерти
         animator.SetTrigger("Death");
 
-        // Здесь будет вызов GameManager для рестарта
         Debug.Log("Player died!");
     }
 
@@ -175,7 +165,6 @@ public class PlayerController : MonoBehaviour
 
     private void OnDestroy()
     {
-        // Clean up event subscriptions
         if (groundSensor != null)
         {
             groundSensor.OnGrounded -= OnGrounded;

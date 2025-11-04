@@ -8,6 +8,8 @@ TagManager:
   - HealthSprite
   - Enemy
   - PlayerAttack
+  - CoinsText
+  - 'GameOverPanel '
   layers:
   - Default
   - TransparentFX
